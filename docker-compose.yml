@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - pdf_uploads:/tmp/pdf_rag_uploads
+    restart: unless-stopped
+
+volumes:
+  pdf_uploads:
