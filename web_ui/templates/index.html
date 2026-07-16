@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF RAG Pipeline</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --muted: #8b8fa3;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1.5rem;
+  }
+
+  .upload-zone:hover,
+  .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(99,102,241,0.06);
+  }
+
+  .upload-zone .icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .upload-zone p {
+    font-size: 1.05rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .upload-zone .hint {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  /* Options bar */
+  .options {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 1rem;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  .options label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .options input[type="checkbox"] { accent-color: var(--accent); }
+
+  .tesseract-input {
+    flex: 1;
+    min-width: 280px;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+
+  .tesseract-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* Status */
+  .status {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .status.running {
+    display: flex;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.25);
+    color: var(--accent-hover);
+  }
+
+  .status.error {
+    display: flex;
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: var(--danger);
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  .results {
+    display: none;
+  }
+
+  .results.active { display: block; }
+
+  .meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .meta-bar .filename {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .meta-bar .pages {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent-hover);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Content panels */
+  .content-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    max-height: 60vh;
+    overflow: auto;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .content-box markdown-content {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  /* Elements table */
+  .elements-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .elements-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+
+  .elements-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .element-type {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .type-heading { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+  .type-paragraph { background: rgba(139,143,163,0.1); color: #c7cad9; }
+  .type-list_item { background: rgba(34,197,94,0.12); color: #86efac; }
+  .type-table { background: rgba(245,158,11,0.12); color: #fcd34d; }
+  .type-code_block { background: rgba(239,68,68,0.1); color: #fca5a5; }
+  .type-quote { background: rgba(168,85,247,0.12); color: #d8b4fe; }
+
+  .bbox-cell {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  /* Copy button */
+  .action-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .btn {
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    background: rgba(99,102,241,0.08);
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn.primary:hover { background: var(--accent-hover); }
+
+  /* Table styles in markdown */
+  .content-box table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5rem 0;
+  }
+
+  .content-box th,
+  .content-box td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.7rem;
+    text-align: left;
+  }
+
+  .content-box th {
+    background: rgba(99,102,241,0.08);
+    font-weight: 600;
+  }
+
+  .content-box h1, .content-box h2, .content-box h3 {
+    color: var(--accent-hover);
+    margin: 1rem 0 0.4rem 0;
+  }
+
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 3rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>PDF RAG <span>Pipeline</span></h1>
+    <p class="subtitle">Upload a PDF. Get clean Markdown, JSON, and structured elements with bounding boxes.</p>
+  </header>
+
+  <div id="dropZone" class="upload-zone">
+    <div class="icon">&#128196;</div>
+    <p>Drop a PDF here or click to browse</p>
+    <span class="hint">Supports complex layouts, tables, multi-column, scanned docs (OCR)</span>
+    <input type="file" id="fileInput" accept=".pdf" style="display:none">
+  </div>
+
+  <div class="options">
+    <label><input type="checkbox" id="optOcr" checked> OCR</label>
+    <label><input type="checkbox" id="optTables" checked> Tables</label>
+    <label><input type="checkbox" id="optLayout" checked> Layout</label>
+    <label style="margin-left:0.5rem">Max pages: <input type="number" id="optMaxPages" value="50" min="1" max="1000" style="width:60px;padding:0.4rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.85rem"></label>
+    <input type="text" id="optTesseract" class="tesseract-input" placeholder="Tesseract path (optional): C:\Program Files\Tesseract-OCR\tesseract.exe">
+  </div>
+
+  <div id="status" class="status">
+    <div class="spinner"></div>
+    <span id="statusText">Processing PDF...</span>
+  </div>
+
+  <div id="results" class="results">
+    <div class="meta-bar">
+      <span class="filename" id="resultFilename"></span>
+      <span class="pages" id="resultPages"></span>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn" onclick="copyTab()">Copy to clipboard</button>
+      <button class="btn" onclick="downloadMD()">Download .md</button>
+      <button class="btn" onclick="downloadJSON()">Download .json</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('markdown')">Markdown</button>
+      <button class="tab-btn" onclick="switchTab('json')">JSON</button>
+      <button class="tab-btn" onclick="switchTab('elements')">Elements</button>
+      <button class="tab-btn" onclick="switchTab('tables')">Tables</button>
+    </div>
+
+    <div id="tab-markdown" class="tab-panel active">
+      <div class="content-box" id="mdContent"></div>
+    </div>
+    <div id="tab-json" class="tab-panel">
+      <div class="content-box" id="jsonContent"></div>
+    </div>
+    <div id="tab-elements" class="tab-panel">
+      <div class="content-box" id="elementsContent"></div>
+    </div>
+    <div id="tab-tables" class="tab-panel">
+      <div class="content-box" id="tablesContent"></div>
+    </div>
+  </div>
+
+  <div class="footer">PDF RAG Pipeline v1.0.0</div>
+</div>
+
+<script>
+let currentData = null;
+let currentTab = 'markdown';
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+const resultsEl = document.getElementById('results');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+function getConfig() {
+  const maxPagesVal = parseInt(document.getElementById('optMaxPages').value, 10);
+  return {
+    enable_ocr: document.getElementById('optOcr').checked,
+    enable_tables: document.getElementById('optTables').checked,
+    enable_layout_detection: document.getElementById('optLayout').checked,
+    tesseract_cmd: document.getElementById('optTesseract').value.trim() || null,
+    max_pages: isNaN(maxPagesVal) || maxPagesVal <= 0 ? null : maxPagesVal,
+  };
+}
+
+async function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    showStatus('Please upload a PDF file', 'error');
+    return;
+  }
+
+  showStatus('Uploading...', 'running');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+    const uploadData = await uploadRes.json();
+
+    if (uploadData.error) {
+      showStatus(uploadData.error, 'error');
+      return;
+    }
+
+    showStatus('Processing PDF — extracting text, tables, layout...', 'running');
+
+    const processRes = await fetch(`/api/process/${uploadData.file_id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getConfig()),
+    });
+
+    const processData = await processRes.json();
+
+    if (processData.error) {
+      showStatus(processData.error, 'error');
+      return;
+    }
+
+    currentData = processData;
+    renderResults(processData, file.name);
+    hideStatus();
+  } catch (err) {
+    showStatus('Error: ' + err.message, 'error');
+  }
+}
+
+function renderResults(data, filename) {
+  document.getElementById('resultFilename').textContent = filename;
+  const truncated = data.truncated ? ` ⚠ (first ${data.pages_processed} of ${data.page_count} pages)` : '';
+  document.getElementById('resultPages').textContent = `${data.page_count} page${data.page_count !== 1 ? 's' : ''}${truncated}`;
+
+  // Markdown
+  document.getElementById('mdContent').innerHTML = renderMarkdown(data.markdown);
+
+  // JSON
+  document.getElementById('jsonContent').textContent = JSON.stringify({
+    file_path: filename,
+    page_count: data.page_count,
+    elements: data.elements,
+    tables: data.tables,
+  }, null, 2);
+
+  // Elements table
+  document.getElementById('elementsContent').innerHTML = buildElementsTable(data.elements);
+
+  // Tables
+  document.getElementById('tablesContent').innerHTML = buildTablesView(data.tables);
+
+  resultsEl.classList.add('active');
+  switchTab('markdown');
+}
+
+function buildElementsTable(elements) {
+  if (!elements || !elements.length) return '<p style="color:var(--muted)">No elements extracted.</p>';
+
+  let html = `<table class="elements-table"><thead><tr>
+    <th>#</th><th>Type</th><th>Text</th><th>Page</th><th>Bounding Box</th>
+  </tr></thead><tbody>`;
+
+  elements.forEach((el, i) => {
+    const bbox = el.bbox;
+    html += `<tr>
+      <td style="color:var(--muted)">${i + 1}</td>
+      <td><span class="element-type type-${el.type}">${el.type}</span></td>
+      <td>${escapeHtml(el.text.length > 120 ? el.text.slice(0, 120) + '...' : el.text)}</td>
+      <td>${bbox.page + 1}</td>
+      <td class="bbox-cell">(${bbox.x0}, ${bbox.y0}) → (${bbox.x1}, ${bbox.y1})</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function buildTablesView(tables) {
+  if (!tables || !tables.length) return '<p style="color:var(--muted)">No tables extracted.</p>';
+
+  let html = '';
+  tables.forEach((t, idx) => {
+    html += `<h3 style="color:var(--accent-hover);margin-bottom:0.5rem">Table ${idx + 1}</h3>`;
+    html += `<p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">Page ${t.bbox.page + 1} · (${t.bbox.x0}, ${t.bbox.y0}) → (${t.bbox.x1}, ${t.bbox.y1})</p>`;
+    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">';
+
+    // Column headers
+    if (t.column_headers && t.column_headers.length) {
+      html += '<thead><tr>';
+      t.column_headers.forEach(h => html += `<th>${escapeHtml(h)}</th>`);
+      html += '</tr></thead>';
+    }
+
+    // Rows
+    html += '<tbody>';
+    const startRow = (t.column_headers && t.column_headers.length && t.rows.length && arraysEqual(t.column_headers, t.rows[0])) ? 1 : 0;
+    for (let i = startRow; i < t.rows.length; i++) {
+      html += '<tr>';
+      t.rows[i].forEach(cell => html += `<td>${escapeHtml(cell)}</td>`);
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+  });
+
+  return html;
+}
+
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+}
+
+function renderMarkdown(md) {
+  let html = md;
+
+  // Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // Heading
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr>');
+
+  // HTML comments (bbox metadata) — keep but dim
+  html = html.replace(/<!--(.+?)-->/g, '<span style="color:var(--muted);font-size:0.75rem">&lt;!--$1--&gt;</span>');
+
+  // Tables
+  html = html.replace(/(\|.+\|\n\|[-| ]+\|\n((?:\|.+\|\n?)*))/g, (match) => {
+    const lines = match.trim().split('\n');
+    if (lines.length < 2) return match;
+    let tbl = '<table>';
+    lines.forEach((line, i) => {
+      if (i === 1) return;
+      const cells = line.split('|').filter(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      tbl += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+    });
+    tbl += '</table>';
+    return tbl;
+  });
+
+  // Paragraphs
+  html = html.replace(/\n\n+/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+
+  return html;
+}
+
+function showStatus(msg, type) {
+  statusEl.className = 'status ' + type;
+  statusText.textContent = msg;
+  statusEl.style.display = 'flex';
+}
+
+function hideStatus() {
+  statusEl.className = 'status';
+  statusEl.style.display = 'none';
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  const btns = document.querySelectorAll('.tab-btn');
+  for (const btn of btns) {
+    if (btn.textContent.toLowerCase().includes(tab)) btn.classList.add('active');
+  }
+}
+
+function copyTab() {
+  let text = '';
+  if (currentTab === 'markdown') text = currentData.markdown;
+  else if (currentTab === 'json') text = document.getElementById('jsonContent').textContent;
+  else if (currentTab === 'elements') text = JSON.stringify(currentData.elements, null, 2);
+  else if (currentTab === 'tables') text = JSON.stringify(currentData.tables, null, 2);
+
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = event.target.textContent;
+    event.target.textContent = 'Copied!';
+    setTimeout(() => { event.target.textContent = orig; }, 1500);
+  });
+}
+
+function downloadMD() {
+  if (!currentData) return;
+  const blob = new Blob([currentData.markdown], { type: 'text/markdown' });
+  downloadBlob(blob, 'output.md');
+}
+
+function downloadJSON() {
+  if (!currentData) return;
+  const json = JSON.stringify({
+    elements: currentData.elements,
+    tables: currentData.tables,
+  }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  downloadBlob(blob, 'output.json');
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

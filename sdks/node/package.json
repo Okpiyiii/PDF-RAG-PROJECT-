@@ -1,0 +1,29 @@
+{
+  "name": "pdf-rag-sdk",
+  "version": "1.0.0",
+  "description": "Node.js SDK for the PDF RAG Pipeline — structured PDF extraction with bounding boxes, tables, OCR, and accessibility tagging.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "pdf",
+    "rag",
+    "ocr",
+    "table-extraction",
+    "accessibility",
+    "bounding-box",
+    "markdown",
+    "json"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  }
+}

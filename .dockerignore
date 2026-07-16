@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+.venv
+.git
+.gitignore
+*.egg-info
+dist
+build
+.idea
+.vscode
+venv
